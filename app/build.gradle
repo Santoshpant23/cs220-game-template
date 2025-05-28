@@ -1,8 +1,6 @@
 plugins {
-    id 'java'
     id 'application'
-    id 'org.openjfx.javafxplugin' version '0.1.0'
-    //id 'org.openjfx.javafxplugin' version '0.0.13'
+    id 'org.openjfx.javafxplugin' version '0.0.13'
 }
 
 repositories {
@@ -10,8 +8,8 @@ repositories {
 }
 
 javafx {
-    version = '21' 
-    modules = [ 'javafx.base', 'javafx.controls', 'javafx.fxml', 'javafx.graphics' ] 
+    version = '17'
+    modules = ['javafx.controls', 'javafx.fxml']
 }
 
 dependencies {
@@ -24,7 +22,7 @@ dependencies {
 
 application {
     // Define the main class for the application.
-    mainClass = 'game.template.App'
+    mainClass = 'com.example.PokerGame'
 }
 
 tasks.named('test') {
