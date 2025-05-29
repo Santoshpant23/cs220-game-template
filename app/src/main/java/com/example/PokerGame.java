@@ -6,48 +6,46 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
 import javafx.animation.PauseTransition;
 import javafx.util.Duration;
+import javafx.stage.Modality;
 
 import java.util.*;
 
 public class PokerGame extends Application {
     private Deck deck;
-    private Player player;
-    private Player dealer;
+    private Player player, dealer;
     private PokerAI ai;
-    private HBox playerCards;
-    private HBox dealerCards;
-    private HBox communityCards;
-    private Label playerChips;
-    private Label dealerChips;
-    private Label gameStatus;
-    private Label potLabel;
-    private Button dealButton, foldButton, callButton, raiseButton, exitButton;
+
+    private HBox playerCards, dealerCards, communityCards;
+    private Label playerChips, dealerChips, potLabel, gameStatus;
+    private Button dealButton, foldButton, callButton, raiseButton, exitGameButton;
     private Slider betSlider;
+
     private int currentBet = 0;
     private int pot = 0;
-    private boolean isPlayerTurn = true;
-    private boolean isPlayerDealer = false;
+    private boolean isPlayerTurn;
+    private boolean isPlayerDealer;
 
-    private enum GameStage {
+    private enum StageName {
         PRE_FLOP, FLOP, TURN, RIVER, SHOWDOWN
     }
 
-    private GameStage stage = GameStage.PRE_FLOP;
-    private List<Card> communityCardList = new ArrayList<>();
+    private StageName stage = StageName.PRE_FLOP;
+
+    private List<Card> communityList = new ArrayList<>();
     private int callCount = 0;
 
-    private StackPane rootPane;
-    private Scene mainScene;
+    private StackPane root;
+    private Scene scene;
     private VBox homeScreen, rulesScreen, tutorialScreen, gameScreenContainer;
     private BorderPane gameScreen;
     private Font pokerFont;
@@ -55,30 +53,29 @@ public class PokerGame extends Application {
     @Override
     public void start(Stage primaryStage) {
         loadFont();
-        rootPane = new StackPane();
-        mainScene = new Scene(rootPane, 1000, 800);
+        root = new StackPane();
+        scene = new Scene(root, 1000, 800);
 
         setupHomeScreen();
         setupRulesScreen();
         setupTutorialScreen();
         setupGameScreen();
 
-        showHomeScreen();
+        showHome();
 
         primaryStage.setTitle("Poker Game");
         primaryStage.getIcons().add(new Image(getClass().getResourceAsStream("/assets/KC.png")));
-        primaryStage.setScene(mainScene);
+        primaryStage.setScene(scene);
         primaryStage.show();
     }
 
     private void loadFont() {
+        pokerFont = Font.font("Serif", FontWeight.BOLD, 24);
         try {
-            pokerFont = Font.loadFont(getClass().getResourceAsStream("/assets/Play-Regular.ttf"), 24);
-        } catch (Exception e) {
-            pokerFont = null;
-        }
-        if (pokerFont == null) {
-            pokerFont = Font.font("Serif", FontWeight.BOLD, 24);
+            Font f = Font.loadFont(getClass().getResourceAsStream("/assets/Play-Regular.ttf"), 24);
+            if (f != null)
+                pokerFont = f;
+        } catch (Exception ignored) {
         }
     }
 
@@ -97,11 +94,12 @@ public class PokerGame extends Application {
         title.setTextFill(Color.web("#FFD700"));
         title.setStyle("-fx-effect: dropshadow(gaussian, black, 4, 0.5, 2, 2);");
 
-        Button startBtn = makeButton("Start Game", e -> showGameScreen(), "#388E3C");
-        Button rulesBtn = makeButton("Rules", e -> showRulesScreen(), "#1976D2");
-        Button tutorialBtn = makeButton("Tutorial", e -> showTutorialScreen(), "#FFA000");
+        Button start = styledButton("Start Game", "#388E3C", e -> showGame());
+        Button rules = styledButton("Rules", "#1976D2", e -> showRules());
+        Button tut = styledButton("Tutorial", "#FFA000", e -> showTutorial());
+        Button exit = styledButton("Exit", "#E53935", e -> Platform.exit());
 
-        homeScreen.getChildren().addAll(logo, title, startBtn, rulesBtn, tutorialBtn);
+        homeScreen.getChildren().setAll(logo, title, start, rules, tut, exit);
     }
 
     private void setupRulesScreen() {
@@ -110,27 +108,27 @@ public class PokerGame extends Application {
         rulesScreen.setStyle("-fx-background-color: #2B4C1E;");
         rulesScreen.setPadding(new Insets(60));
 
-        Label rulesTitle = new Label("Poker Rules");
-        rulesTitle.setFont(Font.font(pokerFont.getFamily(), FontWeight.BOLD, 40));
-        rulesTitle.setTextFill(Color.web("#FFD700"));
-        rulesTitle.setStyle("-fx-effect: dropshadow(gaussian, black, 4, 0.5, 2, 2);");
+        Label h = new Label("Poker Rules");
+        h.setFont(Font.font(pokerFont.getFamily(), FontWeight.BOLD, 40));
+        h.setTextFill(Color.web("#FFD700"));
+        h.setStyle("-fx-effect: dropshadow(gaussian, black, 4, 0.5, 2, 2);");
 
-        Label rulesText = new Label(
+        Label text = new Label(
                 "1. Each player is dealt 3 cards.\n" +
-                        "2. 5 community cards revealed in stages: Flop (3), Turn (1), River (1).\n" +
-                        "3. Players bet each round: Fold, Call, or Raise.\n" +
+                        "2. Community cards revealed in stages: Flop(3), Turn(1), River(1).\n" +
+                        "3. Betting each round: Fold, Call, or Raise.\n" +
                         "4. Best 3-card hand wins at showdown.\n" +
-                        "5. High card if no pairs or trips.\n" +
-                        "6. Dealer's cards hidden until showdown.\n" +
+                        "5. High card if no pairs/trips.\n" +
+                        "6. Dealer’s cards hidden until showdown.\n" +
                         "7. Enjoy responsibly!");
-        rulesText.setFont(Font.font(pokerFont.getFamily(), FontWeight.NORMAL, 22));
-        rulesText.setTextFill(Color.WHITE);
-        rulesText.setWrapText(true);
-        rulesText.setTextAlignment(TextAlignment.CENTER);
-        rulesText.setMaxWidth(700);
+        text.setFont(Font.font(pokerFont.getFamily(), FontWeight.NORMAL, 22));
+        text.setTextFill(Color.WHITE);
+        text.setWrapText(true);
+        text.setAlignment(Pos.CENTER);
+        text.setMaxWidth(700);
 
-        Button backBtn = makeButton("Back", e -> showHomeScreen(), "#f44336");
-        rulesScreen.getChildren().addAll(rulesTitle, rulesText, backBtn);
+        Button back = styledButton("Back", "#f44336", e -> showHome());
+        rulesScreen.getChildren().setAll(h, text, back);
     }
 
     private void setupTutorialScreen() {
@@ -139,150 +137,178 @@ public class PokerGame extends Application {
         tutorialScreen.setStyle("-fx-background-color: #2B4C1E;");
         tutorialScreen.setPadding(new Insets(40));
 
-        Label tutTitle = new Label("Game Tutorial");
-        tutTitle.setFont(Font.font(pokerFont.getFamily(), FontWeight.BOLD, 40));
-        tutTitle.setTextFill(Color.web("#FFD700"));
+        Label h = new Label("Game Tutorial");
+        h.setFont(Font.font(pokerFont.getFamily(), FontWeight.BOLD, 40));
+        h.setTextFill(Color.web("#FFD700"));
 
-        TextArea tutText = new TextArea(
-                "Deal: Starts a new hand, shuffles, posts blinds, and deals cards.\n" +
-                        "Fold: Forfeit the round and concede chips to opponent.\n" +
-                        "Call: Match the current bet to stay in the hand.\n" +
-                        "Raise: Increase the bet above the current amount.\n" +
-                        "Bet Slider: Choose your raise amount within available chips.\n" +
-                        "Pot Display: Shows total chips in the middle.\n" +
-                        "Chips Display: Shows remaining chips for each player.\n" +
-                        "Community Cards: Shared cards revealed each stage.\n" +
-                        "Game Status: Displays current turn and outcomes.\n" +
-                        "Exit: Closes the application.");
-        tutText.setWrapText(true);
-        tutText.setEditable(false);
-        tutText.setStyle("-fx-font-size: 16px; -fx-control-inner-background: #1E352A; -fx-text-fill: white;");
-        tutText.setPrefRowCount(12);
-        tutText.setPrefColumnCount(50);
+        // Build up a String with \u2022 (bullet) and only straight ASCII characters
+        // everywhere
+        String tutorialText = "\u2022 Deal:   Starts a new hand - shuffles deck, posts blinds, deals 3 cards each.\n" +
+                "\u2022 Fold:   Give up the round; opponent wins the pot.\n" +
+                "\u2022 Call:   Match the current bet to stay in.\n" +
+                "\u2022 Raise:  Increase the bet above the current amount.\n" +
+                "\u2022 Bet Slider: Drag to choose your raise amount (min = currentBet + 1).\n" +
+                "\u2022 Pot Display: Shows how many chips are in the pot.\n" +
+                "\u2022 Chips Display: Shows your remaining chips and the dealer's.\n" +
+                "\u2022 Community Cards: Revealed in stages (Flop -> Turn -> River).\n" +
+                "\u2022 Game Status: Text below the pot shows whose turn it is and outcomes.\n" +
+                "\u2022 Exit (In-Game): Abandon hand, return to main menu.\n" +
+                "\u2022 Exit (Main Menu): Quit the application.\n";
 
-        Button backBtn = makeButton("Back", e -> showHomeScreen(), "#f44336");
-        tutorialScreen.getChildren().addAll(tutTitle, tutText, backBtn);
+        TextArea ta = new TextArea(tutorialText);
+        ta.setEditable(false);
+        ta.setWrapText(true);
+        ta.setPrefRowCount(12);
+        ta.setPrefColumnCount(50);
+        ta.setStyle("-fx-control-inner-background: #1E352A; -fx-text-fill: white; -fx-font-size: 16;");
+
+        Button back = styledButton("Back", "#f44336", e -> showHome());
+        tutorialScreen.getChildren().setAll(h, ta, back);
     }
 
     private void setupGameScreen() {
         deck = new Deck();
-        player = new Player("Player", 1000);
+        player = new Player("You", 1000);
         dealer = new Player("Dealer", 1000);
         ai = new PokerAI();
-        communityCardList.clear();
 
         gameScreen = new BorderPane();
         gameScreen.setStyle("-fx-background-color: #2B4C1E;");
         gameScreen.setPadding(new Insets(30));
 
         // Top: Dealer
-        VBox topBox = new VBox(10);
-        topBox.setAlignment(Pos.CENTER);
         dealerCards = new HBox(10);
         dealerCards.setAlignment(Pos.CENTER);
         dealerChips = new Label("Dealer: 1000");
         styleLabel(dealerChips);
-        topBox.getChildren().addAll(dealerCards, dealerChips);
+        VBox top = new VBox(10, dealerCards, dealerChips);
+        top.setAlignment(Pos.CENTER);
 
-        // Center: Community & Status
-        VBox centerBox = new VBox(10);
-        centerBox.setAlignment(Pos.CENTER);
+        // Center: Community + Status
         communityCards = new HBox(10);
         communityCards.setAlignment(Pos.CENTER);
         potLabel = new Label("Pot: 0");
         styleLabel(potLabel);
         gameStatus = new Label("Welcome!");
         styleLabel(gameStatus, 24);
-        centerBox.getChildren().addAll(communityCards, potLabel, gameStatus);
+        VBox center = new VBox(10, communityCards, potLabel, gameStatus);
+        center.setAlignment(Pos.CENTER);
 
-        // Bottom: Player & Controls
-        VBox bottomBox = new VBox(10);
-        bottomBox.setAlignment(Pos.CENTER);
+        // Bottom: Player + Controls
         playerCards = new HBox(10);
         playerCards.setAlignment(Pos.CENTER);
         playerChips = new Label("You: 1000");
         styleLabel(playerChips);
 
-        HBox betBox = new HBox(10);
-        betBox.setAlignment(Pos.CENTER);
-        Label betLbl = new Label("Bet:");
-        styleLabel(betLbl, 16);
-        betSlider = new Slider(10, 100, 10);
-        betSlider.setPrefWidth(200);
+        betSlider = new Slider(1, 100, 1);
         betSlider.setShowTickLabels(true);
         betSlider.setShowTickMarks(true);
         betSlider.setMajorTickUnit(20);
-        betSlider.setBlockIncrement(10);
-        Label valLbl = new Label("10");
-        styleLabel(valLbl, 16);
-        betSlider.valueProperty().addListener((o, oldV, newV) -> valLbl.setText(String.valueOf(newV.intValue())));
-        betBox.getChildren().addAll(betLbl, betSlider, valLbl);
+        betSlider.setBlockIncrement(1);
+        Label betLabel = new Label("Bet:");
+        styleLabel(betLabel, 16);
+        Label valLabel = new Label("1");
+        styleLabel(valLabel, 16);
+        betSlider.valueProperty().addListener((o, oldV, newV) -> {
+            valLabel.setText(String.valueOf(newV.intValue()));
+        });
+        HBox betBox = new HBox(10, betLabel, betSlider, valLabel);
+        betBox.setAlignment(Pos.CENTER);
 
-        HBox btnBox = new HBox(15);
+        dealButton = styledButton("Deal", "#4CAF50", e -> startHand());
+        foldButton = styledButton("Fold", "#f44336", e -> doFold());
+        callButton = styledButton("Call", "#2196F3", e -> doCall());
+        raiseButton = styledButton("Raise", "#FF9800", e -> doRaise());
+        exitGameButton = styledButton("Exit", "#E53935", e -> {
+            // mid‐game exit returns to main menu
+            resetGame();
+            showHome();
+        });
+        HBox btnBox = new HBox(15, dealButton, foldButton, callButton, raiseButton, exitGameButton);
         btnBox.setAlignment(Pos.CENTER);
-        dealButton = makeButton("Deal", e -> dealNewHand(), "#4CAF50");
-        foldButton = makeButton("Fold", e -> fold(), "#f44336");
-        callButton = makeButton("Call", e -> call(), "#2196F3");
-        raiseButton = makeButton("Raise", e -> raise(), "#FF9800");
-        exitButton = makeButton("Exit", e -> Platform.exit(), "#E53935");
-        btnBox.getChildren().addAll(dealButton, foldButton, callButton, raiseButton, exitButton);
 
-        bottomBox.getChildren().addAll(playerCards, playerChips, betBox, btnBox);
+        VBox bottom = new VBox(10, playerCards, playerChips, betBox, btnBox);
+        bottom.setAlignment(Pos.CENTER);
 
-        gameScreen.setTop(topBox);
-        gameScreen.setCenter(centerBox);
-        gameScreen.setBottom(bottomBox);
+        gameScreen.setTop(top);
+        gameScreen.setCenter(center);
+        gameScreen.setBottom(bottom);
     }
 
-    private void styleLabel(Label lbl) {
-        styleLabel(lbl, 22);
-    }
-
-    private void styleLabel(Label lbl, int size) {
-        lbl.setFont(Font.font(pokerFont.getFamily(), FontWeight.BOLD, size));
-        lbl.setTextFill(Color.WHITE);
-    }
-
-    private Button makeButton(String text, javafx.event.EventHandler<javafx.event.ActionEvent> handler,
-            String colorHex) {
+    private Button styledButton(String text, String color, javafx.event.EventHandler<javafx.event.ActionEvent> h) {
         Button b = new Button(text);
         b.setFont(Font.font(pokerFont.getFamily(), FontWeight.BOLD, 18));
-        b.setStyle("-fx-padding: 8 20; -fx-background-radius: 5; -fx-text-fill: white; -fx-background-color: "
-                + colorHex + ";");
-        b.setOnAction(handler);
+        b.setStyle(
+                "-fx-background-color:" + color + "; -fx-text-fill:white; -fx-padding:8 20; -fx-background-radius:5;");
+        b.setOnAction(h);
         return b;
     }
 
-    private void showHomeScreen() {
-        rootPane.getChildren().setAll(homeScreen);
+    private void styleLabel(Label l) {
+        styleLabel(l, 22);
     }
 
-    private void showRulesScreen() {
-        rootPane.getChildren().setAll(rulesScreen);
+    private void styleLabel(Label l, int size) {
+        l.setFont(Font.font(pokerFont.getFamily(), FontWeight.BOLD, size));
+        l.setTextFill(Color.WHITE);
     }
 
-    private void showTutorialScreen() {
-        rootPane.getChildren().setAll(tutorialScreen);
+    private void showHome() {
+        root.getChildren().setAll(homeScreen);
     }
 
-    private void showGameScreen() {
-        rootPane.getChildren().setAll(gameScreen);
-        dealNewHand();
+    private void showRules() {
+        root.getChildren().setAll(rulesScreen);
     }
 
-    private void dealNewHand() {
-        deck.shuffle();
-        communityCardList.clear();
+    private void showTutorial() {
+        root.getChildren().setAll(tutorialScreen);
+    }
+
+    private void showGame() {
+        root.getChildren().setAll(gameScreen);
+        startHand();
+    }
+
+    // Reset state so new hand truly starts fresh
+    private void resetGame() {
+        // restore everyone to full 1000
+        player.setChips(1000);
+        dealer.setChips(1000);
+
+        // clear any old hands
+        player.getHand().clear();
+        dealer.getHand().clear();
+        communityList.clear();
+
+        // reset turn/dealer flags & stage
+        // always start new match with the human as dealer:
+        isPlayerDealer = true;
+
+        isPlayerTurn = true;
+        stage = StageName.PRE_FLOP;
+        pot = callCount = 0;
+
+        // clear displays
         communityCards.getChildren().clear();
         playerCards.getChildren().clear();
         dealerCards.getChildren().clear();
-        isPlayerDealer = !isPlayerDealer;
-        stage = GameStage.PRE_FLOP;
-        pot = 0;
-        callCount = 0;
+    }
 
-        player.clearHand();
-        dealer.clearHand();
+    // Start a fresh hand
+    private void startHand() {
+        deck.shuffle();
+        communityList.clear();
+        communityCards.getChildren().clear();
+        playerCards.getChildren().clear();
+        dealerCards.getChildren().clear();
+
+        isPlayerDealer = !isPlayerDealer;
+        stage = StageName.PRE_FLOP;
+        pot = callCount = 0;
+
+        player.getHand().clear();
+        dealer.getHand().clear();
         for (int i = 0; i < 3; i++) {
             player.addCard(deck.drawCard());
             dealer.addCard(deck.drawCard());
@@ -290,7 +316,7 @@ public class PokerGame extends Application {
         for (int i = 0; i < 5; i++) {
             Card c = deck.drawCard();
             c.setFaceUp(false);
-            communityCardList.add(c);
+            communityList.add(c);
         }
 
         currentBet = 10;
@@ -305,112 +331,98 @@ public class PokerGame extends Application {
         }
         pot = currentBet * 3;
         gameStatus.setText((isPlayerDealer ? "Dealer" : "You") + " posted blinds. Pre-flop.");
-        updateDisplay();
+        updateUI();
         if (!isPlayerTurn)
-            processAITurn();
+            aiTurn();
     }
 
-    private void fold() {
-        if (!isPlayerTurn || stage == GameStage.SHOWDOWN)
+    private void doFold() {
+        if (!isPlayerTurn || stage == StageName.SHOWDOWN)
             return;
         dealer.addChips(pot);
         gameStatus.setText("You folded. Dealer wins.");
         finishShowdown();
     }
 
-    private void call() {
-        if (!isPlayerTurn || stage == GameStage.SHOWDOWN)
+    private void doCall() {
+        if (!isPlayerTurn || stage == StageName.SHOWDOWN)
             return;
-        if (player.removeChips(currentBet)) {
-            pot += currentBet;
-            callCount++;
-            gameStatus.setText("You called " + currentBet);
-            updateDisplay();
-            if (callCount >= 2)
-                nextStageWithDelay();
-            else {
-                isPlayerTurn = false;
-                processAITurn();
-            }
-        } else {
+        if (!player.removeChips(currentBet)) {
             gameStatus.setText("Not enough chips to call.");
+            return;
+        }
+        pot += currentBet;
+        callCount++;
+        gameStatus.setText("You called " + currentBet);
+        updateUI();
+        if (callCount >= 2)
+            nextStage();
+        else {
+            isPlayerTurn = false;
+            aiTurn();
         }
     }
 
-    private void raise() {
-        if (!isPlayerTurn || stage == GameStage.SHOWDOWN)
+    private void doRaise() {
+        if (!isPlayerTurn || stage == StageName.SHOWDOWN)
             return;
         int amt = (int) betSlider.getValue();
         if (amt <= currentBet) {
             gameStatus.setText("Raise must exceed " + currentBet);
             return;
         }
-        if (player.removeChips(amt)) {
-            currentBet = amt;
-            pot += amt;
-            callCount = 1;
-            gameStatus.setText("You raised to " + amt);
-            updateDisplay();
-            isPlayerTurn = false;
-            processAITurn();
-        } else {
+        if (!player.removeChips(amt)) {
             gameStatus.setText("Not enough chips to raise.");
+            return;
         }
-    }
-
-    private void nextStageWithDelay() {
-        PauseTransition pause = new PauseTransition(Duration.seconds(1));
-        pause.setOnFinished(e -> nextStage());
-        pause.play();
+        currentBet = amt;
+        pot += amt;
+        callCount = 1;
+        gameStatus.setText("You raised to " + amt);
+        updateUI();
+        isPlayerTurn = false;
+        aiTurn();
     }
 
     private void nextStage() {
-        if (stage == GameStage.SHOWDOWN)
-            return;
+        // Reveal cards & advance stages; river jumps straight to showdown
         switch (stage) {
             case PRE_FLOP:
-                communityCardList.get(0).setFaceUp(true);
-                communityCardList.get(1).setFaceUp(true);
-                communityCardList.get(2).setFaceUp(true);
-                stage = GameStage.FLOP;
+                for (int i = 0; i < 3; i++)
+                    communityList.get(i).setFaceUp(true);
+                stage = StageName.FLOP;
                 break;
             case FLOP:
-                communityCardList.get(3).setFaceUp(true);
-                stage = GameStage.TURN;
+                communityList.get(3).setFaceUp(true);
+                stage = StageName.TURN;
                 break;
             case TURN:
-                communityCardList.get(4).setFaceUp(true);
-                stage = GameStage.RIVER;
-                break;
-            case RIVER:
-                stage = GameStage.SHOWDOWN;
-                break;
+                communityList.get(4).setFaceUp(true);
+                // Immediately go to showdown
+                stage = StageName.SHOWDOWN;
+                finishShowdown();
+                return;
             default:
                 return;
         }
-        potLabel.setText("Pot: " + pot);
-        gameStatus.setText(stage.name() + ": " + (isPlayerTurn ? "Your turn" : "Dealer's turn"));
         callCount = 0;
         currentBet = 0;
         isPlayerTurn = !isPlayerDealer;
-        updateDisplay();
-        if (!isPlayerTurn && stage != GameStage.SHOWDOWN)
-            processAITurn();
-        if (stage == GameStage.SHOWDOWN)
-            finishShowdown();
+        updateUI();
+        if (!isPlayerTurn)
+            aiTurn();
+        gameStatus.setText(stage.name() + " - " + (isPlayerTurn ? "Your turn" : "Dealer's turn"));
     }
 
-    private void processAITurn() {
-        if (stage == GameStage.SHOWDOWN)
-            return;
+    private void aiTurn() {
         disableActions(true);
-        PauseTransition pause = new PauseTransition(Duration.seconds(1));
-        pause.setOnFinished(e -> {
-            PokerAI.Action action = ai.decideAction(dealer.getHand(), visibleCommunity(), currentBet, pot);
-            switch (action) {
+        PauseTransition p = new PauseTransition(Duration.seconds(1));
+        p.setOnFinished(e -> {
+            PokerAI.Action act = ai.decideAction(dealer.getHand(), visibleCommunity(), currentBet, pot);
+            switch (act) {
                 case FOLD:
                     player.addChips(pot);
-                    gameStatus.setText("Dealer folded. You win.");
+                    gameStatus.setText("Dealer folded. You win!");
                     finishShowdown();
                     break;
                 case CALL:
@@ -418,111 +430,174 @@ public class PokerGame extends Application {
                     pot += currentBet;
                     callCount++;
                     gameStatus.setText("Dealer called.");
-                    updateDisplay();
+                    updateUI();
                     if (callCount >= 2)
-                        nextStageWithDelay();
+                        nextStage();
                     else {
                         isPlayerTurn = true;
                         disableActions(false);
                     }
                     break;
                 case RAISE:
-                    int raiseAmt = ai.decideRaiseAmount(currentBet, pot);
-                    dealer.removeChips(raiseAmt);
-                    pot += raiseAmt;
-                    currentBet = raiseAmt;
+                    int r = ai.decideRaiseAmount(currentBet, pot, dealer.getChips());
+                    dealer.removeChips(r);
+                    pot += r;
+                    currentBet = r;
                     callCount = 1;
-                    gameStatus.setText("Dealer raised to " + raiseAmt);
-                    updateDisplay();
+                    gameStatus.setText("Dealer raised to " + r);
+                    updateUI();
                     isPlayerTurn = true;
                     disableActions(false);
                     break;
             }
         });
-        pause.play();
+        p.play();
     }
 
     private List<Card> visibleCommunity() {
-        List<Card> visible = new ArrayList<>();
-        for (Card c : communityCardList)
+        List<Card> v = new ArrayList<>();
+        for (Card c : communityList)
             if (c.isFaceUp())
-                visible.add(c);
-        return visible;
-    }
-
-    private void revealAll() {
-        dealer.getHand().forEach(c -> c.setFaceUp(true));
-        communityCardList.forEach(c -> c.setFaceUp(true));
-        updateDisplay();
+                v.add(c);
+        return v;
     }
 
     private void finishShowdown() {
-        revealAll();
+        // reveal all
+        dealer.getHand().forEach(c -> c.setFaceUp(true));
+        communityList.forEach(c -> c.setFaceUp(true));
+        updateUI();
         evaluateWinner();
+        showEndDialog();
     }
 
     private void evaluateWinner() {
         List<Card> pFull = new ArrayList<>(player.getHand());
-        pFull.addAll(communityCardList);
+        pFull.addAll(communityList);
         List<Card> dFull = new ArrayList<>(dealer.getHand());
-        dFull.addAll(communityCardList);
-        HandRank pRank = evaluateRank(pFull);
-        HandRank dRank = evaluateRank(dFull);
-        if (pRank.value > dRank.value) {
+        dFull.addAll(communityList);
+
+        HandRank hp = HandRank.evaluate(pFull);
+        HandRank hd = HandRank.evaluate(dFull);
+
+        if (hp.value > hd.value) {
             player.addChips(pot);
-            gameStatus.setText("You win: " + pRank.name);
-        } else if (dRank.value > pRank.value) {
+            gameStatus.setText("You win with " + hp.name + "!");
+        } else if (hd.value > hp.value) {
             dealer.addChips(pot);
-            gameStatus.setText("Dealer wins: " + dRank.name);
+            gameStatus.setText("Dealer wins with " + hd.name + "!");
         } else {
-            gameStatus.setText("Tie: " + pRank.name);
+            gameStatus.setText("Tie: " + hp.name + "!");
         }
         pot = 0;
-        updateDisplay();
+        updateUI();
     }
 
-    private HandRank evaluateRank(List<Card> cards) {
-        Map<Integer, Integer> count = new HashMap<>();
-        for (Card c : cards)
-            count.merge(c.getValue(), 1, Integer::sum);
-        if (count.values().stream().anyMatch(v -> v >= 3))
-            return new HandRank("Three of a Kind", 4);
-        long pairs = count.values().stream().filter(v -> v >= 2).count();
-        if (pairs >= 2)
-            return new HandRank("Two Pair", 3);
-        if (pairs == 1)
-            return new HandRank("Pair", 2);
-        int high = count.keySet().stream().mapToInt(v -> v).max().orElse(0);
-        return new HandRank("High Card", 1);
+    private void showEndDialog() {
+        // create a modal dialog Stage
+        Stage dialog = new Stage();
+        dialog.initModality(Modality.APPLICATION_MODAL);
+        dialog.setTitle("Hand Over");
+
+        // layout
+        VBox box = new VBox(20);
+        box.setAlignment(Pos.CENTER);
+        box.setPadding(new Insets(20));
+        box.setStyle("-fx-background-color: #2B4C1E; -fx-border-color: #FFD700; -fx-border-width: 2;");
+
+        // result message
+        Label msg = new Label(gameStatus.getText());
+        msg.setFont(Font.font(pokerFont.getFamily(), FontWeight.BOLD, 24));
+        msg.setTextFill(Color.WHITE);
+
+        // Play Again button
+        Button playAgain = styledButton("Play Again", "#4CAF50", e -> {
+            dialog.close();
+            resetGame(); // reset chips & state
+            startHand(); // deal fresh hand
+        });
+
+        // Main Menu button
+        Button menu = styledButton("Main Menu", "#1976D2", e -> {
+            dialog.close();
+            resetGame();
+            showHome();
+        });
+
+        HBox btns = new HBox(15, playAgain, menu);
+        btns.setAlignment(Pos.CENTER);
+
+        box.getChildren().addAll(msg, btns);
+
+        Scene sdScene = new Scene(box);
+        dialog.setScene(sdScene);
+        dialog.showAndWait();
     }
 
-    private void updateDisplay() {
+    private void updateUI() {
+        // cards
         playerCards.getChildren().clear();
         dealerCards.getChildren().clear();
         communityCards.getChildren().clear();
         for (Card c : player.getHand())
             playerCards.getChildren().add(c.getCardView());
         for (Card c : dealer.getHand()) {
-            c.setFaceUp(stage == GameStage.SHOWDOWN);
+            c.setFaceUp(stage == StageName.SHOWDOWN);
             dealerCards.getChildren().add(c.getCardView());
         }
-        for (Card c : communityCardList)
+        for (Card c : communityList)
             communityCards.getChildren().add(c.getCardView());
-        playerChips.setText("You: " + player.getChips());
+
+        // labels
+        playerChips.setText("You:    " + player.getChips());
         dealerChips.setText("Dealer: " + dealer.getChips());
-        potLabel.setText("Pot: " + pot);
-        disableActions(stage == GameStage.SHOWDOWN || !isPlayerTurn);
-        dealButton.setDisable(stage != GameStage.SHOWDOWN);
+        potLabel.setText("Pot:    " + pot);
+
+        // slider bounds: min = currentBet+1
+        int min = currentBet + 1;
+        int max = Math.max(min, Math.min(player.getChips(), dealer.getChips()));
+        betSlider.setMin(min);
+        betSlider.setMax(max);
+        if (betSlider.getValue() < min)
+            betSlider.setValue(min);
+
+        // buttons
+        dealButton.setDisable(stage != StageName.SHOWDOWN);
+        disableActions(!isPlayerTurn || stage == StageName.SHOWDOWN);
     }
 
-    private void disableActions(boolean disable) {
-        foldButton.setDisable(disable);
-        callButton.setDisable(disable);
-        raiseButton.setDisable(disable);
-        betSlider.setDisable(disable);
+    private void disableActions(boolean d) {
+        foldButton.setDisable(d);
+        callButton.setDisable(d);
+        raiseButton.setDisable(d || betSlider.getMax() < betSlider.getMin());
+        betSlider.setDisable(d);
     }
 
-    private record HandRank(String name, int value) {
+    /***** Helper Rank class *****/
+    private static class HandRank {
+        final String name;
+        final int value;
+
+        private HandRank(String n, int v) {
+            name = n;
+            value = v;
+        }
+
+        static HandRank evaluate(List<Card> cards) {
+            Map<Integer, Integer> cnt = new HashMap<>();
+            for (Card c : cards)
+                cnt.merge(c.getValue(), 1, Integer::sum);
+            boolean trips = cnt.values().stream().anyMatch(x -> x >= 3);
+            long pairs = cnt.values().stream().filter(x -> x >= 2).count();
+            if (trips)
+                return new HandRank("Three of a Kind", 4);
+            if (pairs >= 2)
+                return new HandRank("Two Pair", 3);
+            if (pairs == 1)
+                return new HandRank("Pair", 2);
+            int high = cnt.keySet().stream().mapToInt(i -> i).max().orElse(0);
+            return new HandRank("High Card", 1);
+        }
     }
 
     public static void main(String[] args) {

@@ -34,6 +34,10 @@ public class Player {
         chips += amount;
     }
 
+    public void setChips(int amount) {
+        this.chips = amount;
+    }
+
     public boolean removeChips(int amount) {
         if (chips >= amount) {
             chips -= amount;

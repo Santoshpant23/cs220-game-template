@@ -19,6 +19,7 @@ public class PokerAI {
     }
 
     public Action decideAction(List<Card> hand, List<Card> communityCards, int currentBet, int potSize) {
+
         double handStrength = calculateHandStrength(hand, communityCards);
         double potOdds = (double) currentBet / (potSize + currentBet);
 
@@ -57,22 +58,36 @@ public class PokerAI {
         return Action.FOLD;
     }
 
-    public int decideRaiseAmount(int currentBet, int potSize) {
-        // More aggressive raise sizing
+    /**
+     * Decide how much the AI should raise, clamped to the dealer’s available chips.
+     *
+     * @param currentBet The current highest bet on the table.
+     * @param potSize    The size of the pot (before this raise).
+     * @param maxChips   The maximum chips the dealer actually has left.
+     * @return A raise amount between (currentBet*2) and the smaller of
+     *         (currentBet*5, potSize*2, maxChips).
+     */
+    public int decideRaiseAmount(int currentBet, int potSize, int maxChips) {
+        // Base bounds
         int minRaise = currentBet * 2;
-        int maxRaise = Math.min(currentBet * 5, potSize * 2); // Allow bigger raises
+        int unclampedMax = Math.min(currentBet * 5, potSize * 2);
+        // Now clamp to what the dealer can actually cover
+        int maxRaise = Math.min(unclampedMax, maxChips);
 
-        // Occasionally make small raises to induce action
-        if (random.nextDouble() < 0.2) {
-            return minRaise;
-        }
-
-        // Sometimes make large raises
-        if (random.nextDouble() < 0.3) {
+        // If they can’t even meet the minimum, go all-in
+        if (maxRaise < minRaise) {
             return maxRaise;
         }
 
-        // Usually make medium-sized raises
+        // 20% chance small trap
+        if (random.nextDouble() < 0.2) {
+            return minRaise;
+        }
+        // 30% chance big shove
+        if (random.nextDouble() < 0.3) {
+            return maxRaise;
+        }
+        // Otherwise medium sized raise
         return minRaise + (maxRaise - minRaise) / 2;
     }
 
