@@ -119,7 +119,7 @@ public class PokerGame extends Application {
                         "3. Betting each round: Fold, Call, or Raise.\n" +
                         "4. Best 3-card hand wins at showdown.\n" +
                         "5. High card if no pairs/trips.\n" +
-                        "6. Dealer’s cards hidden until showdown.\n" +
+                        "6. Dealer's cards hidden until showdown.\n" +
                         "7. Enjoy responsibly!");
         text.setFont(Font.font(pokerFont.getFamily(), FontWeight.NORMAL, 22));
         text.setTextFill(Color.WHITE);
@@ -220,7 +220,7 @@ public class PokerGame extends Application {
         callButton = styledButton("Call", "#2196F3", e -> doCall());
         raiseButton = styledButton("Raise", "#FF9800", e -> doRaise());
         exitGameButton = styledButton("Exit", "#E53935", e -> {
-            // mid‐game exit returns to main menu
+            // mid-game exit returns to main menu
             resetGame();
             showHome();
         });
@@ -477,8 +477,8 @@ public class PokerGame extends Application {
         List<Card> dFull = new ArrayList<>(dealer.getHand());
         dFull.addAll(communityList);
 
-        HandRank hp = HandRank.evaluate(pFull);
-        HandRank hd = HandRank.evaluate(dFull);
+        PokerHandRank hp = PokerHandRank.evaluate(pFull);
+        PokerHandRank hd = PokerHandRank.evaluate(dFull);
 
         if (hp.value > hd.value) {
             player.addChips(pot);
@@ -571,33 +571,6 @@ public class PokerGame extends Application {
         callButton.setDisable(d);
         raiseButton.setDisable(d || betSlider.getMax() < betSlider.getMin());
         betSlider.setDisable(d);
-    }
-
-    /***** Helper Rank class *****/
-    private static class HandRank {
-        final String name;
-        final int value;
-
-        private HandRank(String n, int v) {
-            name = n;
-            value = v;
-        }
-
-        static HandRank evaluate(List<Card> cards) {
-            Map<Integer, Integer> cnt = new HashMap<>();
-            for (Card c : cards)
-                cnt.merge(c.getValue(), 1, Integer::sum);
-            boolean trips = cnt.values().stream().anyMatch(x -> x >= 3);
-            long pairs = cnt.values().stream().filter(x -> x >= 2).count();
-            if (trips)
-                return new HandRank("Three of a Kind", 4);
-            if (pairs >= 2)
-                return new HandRank("Two Pair", 3);
-            if (pairs == 1)
-                return new HandRank("Pair", 2);
-            int high = cnt.keySet().stream().mapToInt(i -> i).max().orElse(0);
-            return new HandRank("High Card", 1);
-        }
     }
 
     public static void main(String[] args) {
